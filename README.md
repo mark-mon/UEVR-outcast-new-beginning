@@ -11,3 +11,7 @@ I also added some user_script and cvar values so you should be able to play in n
 Also, make sure you load the game in DX12 mode not DX11 mode. Not only is DX12 mode better for performance, but also it helps eliminate some weird right eye only effects (like the bird in the title screen on the right vanishing).
 
 If at any point you get out of sync with the 1st / 3rd person, (hopefully this never happens), you can just go into the UEVR menu and toggle UObject hook back on. (The mod turns it off for 3rd person sequences).
+
+Note: the mod requires you to have bound F4 to the UObject enable / disable key in UEVR menu. It sends F4 to change first and third person views.
+This line in config.txt
+UObjectHook_ToggleUObjectHookKey=115
