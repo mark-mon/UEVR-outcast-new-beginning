@@ -4,7 +4,7 @@
 
 using namespace uevr;
 
-class DialogueManager : public API::UObject
+class CinematicManager : public API::UObject
 {
   public:
 	using API::UObject::get_full_name;
@@ -13,26 +13,26 @@ class DialogueManager : public API::UObject
 	{
 		static API::UClass *result = nullptr;
 		if(!result) {
-			result = API::get()->find_uobject<API::UClass>(L"Class /Script/O2.DialogueManager");
+			result = API::get()->find_uobject<API::UClass>(L"Class /Script/O2.CinematicManager");
 		}
 		return result;
 	}
 
-	static DialogueManager *get_instance()
+	static CinematicManager *get_instance()
 	{
-		auto klass = DialogueManager::static_class();
-        DialogueManager* Object = nullptr;
+		auto klass = CinematicManager::static_class();
+        CinematicManager* Object = nullptr;
         
 		if(klass) {
-            std::vector<DialogueManager*> List = klass->get_objects_matching<DialogueManager>();
+            std::vector<CinematicManager*> List = klass->get_objects_matching<CinematicManager>();
             for(size_t i = 0; i < List.size(); i++) {
                 Object = List[i];
                 
                 std::wstring ObjName = Object->get_full_name();
-                //API::get()->log_info("DialogueManager: Object %d of %d, Object name: %ls",i, List.size(), ObjName.c_str());
+                //API::get()->log_info("CinematicManager: Object %d of %d, Object name: %ls",i, List.size(), ObjName.c_str());
                 // Skip anything with GEN_VARIABLE
                 if(ObjName.size() > 0 && ObjName.find(L"GEN_VARIABLE") == std::wstring::npos) {
-                    //API::get()->log_info("DialogueManager: returning instance %d, %ls", i, ObjName.c_str());
+                    //API::get()->log_info("CinematicManager: returning instance %d, %ls", i, ObjName.c_str());
                     break;
                 }
             }
@@ -41,11 +41,10 @@ class DialogueManager : public API::UObject
 		return nullptr;
 	}
 
-	bool is_in_dialogue()
+	bool is_in_cinematic()
 	{
-		static const auto func = DialogueManager::static_class()->find_function(L"IsInDialogue");
+		static const auto func = CinematicManager::static_class()->find_function(L"IsCinematicCurrentlyPlaying");
 		if(!func) {
-			API::get()->log_error("DialogueManager::IsInDialogue not found");
 			return false;
 		} 
         
