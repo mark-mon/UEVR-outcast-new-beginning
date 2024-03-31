@@ -1,16 +1,21 @@
 #define  _CRT_SECURE_NO_WARNINGS 1
+#define  _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING 1
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
 #include <memory>
 #include <ctime>
 #include <iostream>
+#include <fstream>
 
 #include "uevr/Plugin.hpp"
 #include "DialogueManager.hpp"
 #include "CinematicManager.hpp"
 
 #define DELAY_VALUE 2000
+#define MAX_ELEMENT_LEN 128
+#define MAX_PATH_SIZE 512
+#define MAX_LINE_SIZE 256
 
 typedef struct _TIMER_STRUCT
 {
@@ -20,9 +25,11 @@ typedef struct _TIMER_STRUCT
 
 typedef enum _TP_CAUSE {
     CAUSE_NONE = 0,
-    CAUSE_X,
     CAUSE_DIALOGUE,
-    CAUSE_CINEMATIC
+    CAUSE_CINEMATIC,
+    CAUSE_RIGHT_STICK,
+	CAUSE_RBLB,
+    CAUSE_X
 } TP_CAUSE;
 
 void DebugPrint(char* Format, ...);
@@ -87,14 +94,21 @@ TimerCallbackThreadProc(
 class UevrPlugin : public uevr::Plugin {
 public:
     std::time_t m_TimeStamp;
+    std::string m_Path;
     TIMER_STRUCT m_Timer;
+    bool m_XButtonThirdPerson = true;
+    bool m_RightStickUpToggleThirdPerson = false;
+    bool m_RightStickDownB = true;
+	bool m_ThirdPersonGlide = false;
+    
     bool m_XPressed;
     UevrPlugin() = default;
 
-    void on_dllmain() override {
+    void on_dllmain(HANDLE handle) override {
         ZeroMemory(&m_Timer, sizeof(TIMER_STRUCT));
         m_Timer.XPressed = &m_XPressed;
         m_Timer.TimeStamp = &m_TimeStamp;
+        StoreConfigFileLocation(handle);
     }
 
     void on_initialize() override {
@@ -109,7 +123,19 @@ public:
                      0,
                      &ThreadId);
 
-    }
+        ReadConfig(m_Path);
+   }
+
+	//***************************************************************************************************
+	// Stores the path and file location of the cvar.txt config file.
+	//***************************************************************************************************
+	void StoreConfigFileLocation(HANDLE handle) {
+		wchar_t wide_path[MAX_PATH]{};
+		if (GetModuleFileNameW((HMODULE)handle, wide_path, MAX_PATH)) {
+			const auto path = std::filesystem::path(wide_path).parent_path() / "PersonToggle.txt";
+			m_Path = path.string(); // change m_Path to a std::string
+		}
+	}	
 
     //*******************************************************************************************
     // This is the controller input routine. Everything happens here.
@@ -122,6 +148,10 @@ public:
         bool IsInDialogue = false;
         bool IsInCinematic = false;
         static bool XDown = false;
+        static bool RightStickUp = false;
+        static bool InMenu = false;
+        static bool StartKeyDown = false;
+		static bool ShouldersDown = false;
         
         INPUT input;
         ZeroMemory(&input, sizeof(INPUT));
@@ -136,50 +166,67 @@ public:
         
         if(state != NULL) {
             
-            // Check if we are in 3rd person and if so, if we should switch back to first person.    
-            if(FirstPerson == false && Cause >= CAUSE_DIALOGUE) {
-                // Check if 3rd person due to dialog
-                if(Cause == CAUSE_DIALOGUE) {
+            // Check if we are in 3rd person and if so, if we should switch back to first person. 
+            if(FirstPerson == false) {
+                if(Cause < CAUSE_RIGHT_STICK) {
                     const auto DM = DialogueManager::get_instance();
-                    if(DM) {
-                        IsInDialogue = DM->is_in_dialogue();
-                        if(!IsInDialogue) {
-                           KeyDown = true;
-                           input.ki.dwFlags = 0;
-                           SendInput(1, &input, sizeof(INPUT));
-                           FirstPerson = true;
-                           Cause = CAUSE_NONE;
-                           API::get()->log_info("In Dialog=%d, In 3rd, switching to 1st person", IsInCinematic);
+                    const auto CM = CinematicManager::get_instance();
+                    if(DM && DM->is_in_dialogue()) {
+                        IsInDialogue = true;
+                    }
+                    if(CM && CM->is_in_cinematic()) {
+                        IsInCinematic = true;
+                    }
+                    
+                    if(IsInCinematic == false && IsInDialogue == false) {
+                       KeyDown = true;
+                       input.ki.dwFlags = 0;
+                       SendInput(1, &input, sizeof(INPUT));
+                       FirstPerson = true;
+                       Cause = CAUSE_NONE;
+                       API::get()->log_info("InDialog=%d, InCinema=%d, In 3rd, switching to 1st person", IsInDialogue, IsInCinematic);
+                    }
+                } 
+                
+            }
+
+			if(m_ThirdPersonGlide == true) {
+				if((state->Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) && 
+				   (state->Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
+					if(ShouldersDown == false && FirstPerson == true) {
+						ShouldersDown = true;
+					    KeyDown = true;
+					    input.ki.dwFlags = 0;
+					    SendInput(1, &input, sizeof(INPUT));
+					    FirstPerson = false;
+					    Cause = CAUSE_RBLB;
+					}
+				} else {
+					if(ShouldersDown == true && FirstPerson == false && Cause == CAUSE_RBLB) {
+						ShouldersDown = false;
+					    KeyDown = true;
+					    input.ki.dwFlags = 0;
+					    SendInput(1, &input, sizeof(INPUT));
+					    FirstPerson = true;
+						Cause = CAUSE_NONE;
+					}
+				}
+			}
+
+				// Toggle state based on melee or not.
+            if(InMenu == false) {
+                if(m_XButtonThirdPerson && FirstPerson == true) {
+                    if(state->Gamepad.wButtons & XINPUT_GAMEPAD_X) {
+                        if(XDown == false) {
+                            XDown = true;
+                            m_TimeStamp = std::time(0);
+                            m_XPressed = true;
+                        }
+                    } else {
+                        if(XDown == true) {
+                            XDown = false;
                         }
                     }
-                // Check if 3rd person due to cinematic sequence.
-                } else if(Cause == CAUSE_CINEMATIC) {
-                    const auto CM = CinematicManager::get_instance();
-                    if(CM) {
-                        IsInCinematic = CM->is_in_cinematic();
-                        if(!IsInCinematic) {
-                           KeyDown = true;
-                           input.ki.dwFlags = 0;
-                           SendInput(1, &input, sizeof(INPUT));
-                           FirstPerson = true;
-                           Cause = CAUSE_NONE;
-                           API::get()->log_info("In Cinematic=%d, In 3rd, switching to 1st person", IsInCinematic);
-                        }
-                    } 
-                }
-            } 
-
-
-            // Toggle state based on melee or not.
-            if(state->Gamepad.wButtons & XINPUT_GAMEPAD_X) {
-                if(XDown == false) {
-                    XDown = true;
-                    m_TimeStamp = std::time(0);
-                    m_XPressed = true;
-                }
-            } else {
-                if(XDown == true) {
-                    XDown = false;
                 }
             }
             
@@ -201,7 +248,6 @@ public:
                 }
             }
 
-
             // Check if in cinematic (movie) and if so, go to 3rd person.
             if(FirstPerson == true) {
                 const auto CM = CinematicManager::get_instance();
@@ -218,10 +264,122 @@ public:
                 } 
             }
                 
+            // Right stick B
+            if(m_RightStickDownB) {
+                if(state->Gamepad.sThumbRY <= -25000) {
+                    state->Gamepad.sThumbRY = 0;
+                    state->Gamepad.wButtons |= (XINPUT_GAMEPAD_B);
+                }
+            }
+            
+            if(m_RightStickUpToggleThirdPerson) {
+                if(state->Gamepad.sThumbRY >= 25000 && RightStickUp == false) {
+                    state->Gamepad.sThumbRY = 0;
+                    RightStickUp = true;
+                    
+                    input.ki.dwFlags = 0;
+                    SendInput(1, &input, sizeof(INPUT));
+                    KeyDown = true;
+                } else if(state->Gamepad.sThumbRY < 5000) {
+                    RightStickUp = false;
+                    FirstPerson = !FirstPerson;
+                }
+            }
+            
+            // Prevent X from toggling camera and sending a keystroke in the menu where we may
+            // be trying to upgrade an item.
+            if(InMenu == false) {
+                if(state->Gamepad.wButtons & (XINPUT_GAMEPAD_START)) {
+                    StartKeyDown = true;
+                } else if(StartKeyDown == true) {
+                    StartKeyDown = false;
+                    InMenu = true;
+                }
+            } else {
+                if(state->Gamepad.wButtons & (XINPUT_GAMEPAD_B)) {
+                    InMenu = false;
+                } else if(state->Gamepad.wButtons & (XINPUT_GAMEPAD_START)) {
+                    StartKeyDown = true;
+                } else if(StartKeyDown == true) {
+                    StartKeyDown = false;
+                    InMenu = false;
+                }
+            }
                 
         }
 
     }
+
+	//***************************************************************************************************
+	// Reads the config file cvars.txt and stores it in a linked list of CVAR_ITEMs.
+	//***************************************************************************************************
+    void ReadConfig(std::string ConfigFile) {
+		std::string Line;
+		
+		int Length = 0;
+		int i = 0;
+        int LineNumber = 0;
+		size_t Pos = 0;
+		
+        API::get()->log_info("reading config file %s", ConfigFile.c_str());
+		std::ifstream fileStream(ConfigFile.c_str());
+		if(!fileStream.is_open()) {
+			API::get()->log_info("%s cannot be opened or does not exist, using defaults.", ConfigFile.c_str());
+			return;
+		}
+			
+		while (std::getline(fileStream, Line)) {
+            LineNumber++;
+
+            Length = static_cast<int>(Line.length());
+
+			if(Line[0] == '#') continue;
+			if(Line[0] == ';') continue;
+			if(Line[0] == '[') continue;
+			if(Line[0] == ' ') continue;
+			if(Length < 3) continue;
+			
+			// Strip  spaces, carriage returns from line.
+			Pos = Line.find_last_not_of(" \r\n");
+			if(Pos != std::string::npos) {
+				Line.erase(Pos + 1);
+			}
+
+			Pos = Line.find('=');
+			if(Pos == std::string::npos) {
+				continue;
+			}
+
+			API::get()->log_info("Processing config line: %s", Line.c_str());   
+			
+            std::string ConfigLine = Line.substr(0, Pos);
+            std::string ConfigValue = Line.substr(Pos + 1, MAX_ELEMENT_LEN);
+            
+            if(ConfigLine == "XButtonThirdPerson") {
+                if(ConfigValue == "1") m_XButtonThirdPerson = 1;
+                else m_XButtonThirdPerson = 0;
+            }
+
+            if(ConfigLine == "RightStickUpToggleThirdPerson") {
+                if(ConfigValue == "1") m_RightStickUpToggleThirdPerson = 1;
+                else m_RightStickUpToggleThirdPerson = 0;
+            }
+			
+            if(ConfigLine == "RightStickDownB") {
+                if(ConfigValue == "1") m_RightStickDownB = 1;
+                else m_RightStickDownB = 0;
+            }
+			
+            if(ConfigLine == "ThirdPersonGlide") {
+                if(ConfigValue == "1") m_ThirdPersonGlide = 1;
+                else m_ThirdPersonGlide = 0;
+            }
+
+			API::get()->log_info("PersonToggle.txt Added entry command: %s=%s", ConfigLine.c_str(), ConfigValue.c_str());
+		}		
+		
+		fileStream.close();
+	}    
 };
     
 // Actually creates the plugin. Very important that this global is created.
