@@ -17,3 +17,21 @@ If at any point you get out of sync with the 1st / 3rd person, (hopefully this n
 Note: the mod requires you to have bound F4 to the UObject enable / disable key in UEVR menu. It sends F4 to change first and third person views.
 This line in config.txt
 UObjectHook_ToggleUObjectHookKey=115
+
+This takes a config file called "PersonToggle.txt" that goes in the same folder with the plugin.
+These are the fields in the config file. Lack of a config file will just use defaults.
+
+# Options are 1 or 0. 1 for on, 0 for off
+
+# Pressing X for melee toggles 3rd person for 2 seconds. Better Melee
+XButtonThirdPerson=1
+
+# Right stick up on toggles first and third person
+RightStickUpToggleThirdPerson=0
+
+# Right Stick Down sends B button for dodge
+RightStickDownB=1
+
+# LB / RB (gliding) in 3rd person
+ThirdPersonGlide=0
+
