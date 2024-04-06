@@ -100,7 +100,7 @@ public:
     bool m_RightStickUpToggleThirdPerson = false;
     bool m_RightStickDownB = true;
 	bool m_ThirdPersonGlide = false;
-    
+    bool m_SwapLTRB = false;
     bool m_XPressed;
     UevrPlugin() = default;
 
@@ -190,6 +190,36 @@ public:
                 
             }
 
+
+			// Toggle state based on melee or not.
+            if(InMenu == false) {
+                if(m_XButtonThirdPerson && FirstPerson == true) {
+                    if(state->Gamepad.wButtons & XINPUT_GAMEPAD_X) {
+                        if(XDown == false) {
+                            XDown = true;
+                            m_TimeStamp = std::time(0);
+                            m_XPressed = true;
+                        }
+                    } else {
+                        if(XDown == true) {
+                            XDown = false;
+                        }
+                    }
+                }
+                
+                if(m_SwapLTRB) {
+                    bool TempRB = (state->Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? true : false;
+                    
+                    if(state->Gamepad.bLeftTrigger >= 200) {
+                        state->Gamepad.wButtons |= (XINPUT_GAMEPAD_RIGHT_SHOULDER);
+                    } else {
+                        state->Gamepad.wButtons &= ~(XINPUT_GAMEPAD_RIGHT_SHOULDER);
+                    }
+                    
+                    state->Gamepad.bLeftTrigger = (TempRB) ? 255 : 0;
+                }
+            }
+            
 			if(m_ThirdPersonGlide == true) {
 				if((state->Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) && 
 				   (state->Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
@@ -213,23 +243,6 @@ public:
 				}
 			}
 
-				// Toggle state based on melee or not.
-            if(InMenu == false) {
-                if(m_XButtonThirdPerson && FirstPerson == true) {
-                    if(state->Gamepad.wButtons & XINPUT_GAMEPAD_X) {
-                        if(XDown == false) {
-                            XDown = true;
-                            m_TimeStamp = std::time(0);
-                            m_XPressed = true;
-                        }
-                    } else {
-                        if(XDown == true) {
-                            XDown = false;
-                        }
-                    }
-                }
-            }
-            
             // Check if in conversation and if so, go to 3rd person.
             if(state->Gamepad.wButtons & XINPUT_GAMEPAD_Y) {
                 if(FirstPerson == true) {
@@ -373,6 +386,11 @@ public:
             if(ConfigLine == "ThirdPersonGlide") {
                 if(ConfigValue == "1") m_ThirdPersonGlide = 1;
                 else m_ThirdPersonGlide = 0;
+            }
+
+            if(ConfigLine == "SwapLTRB") {
+                if(ConfigValue == "1") m_SwapLTRB = 1;
+                else m_SwapLTRB = 0;
             }
 
 			API::get()->log_info("PersonToggle.txt Added entry command: %s=%s", ConfigLine.c_str(), ConfigValue.c_str());
