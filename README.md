@@ -21,17 +21,19 @@ UObjectHook_ToggleUObjectHookKey=115
 This takes a config file called "PersonToggle.txt" that goes in the same folder with the plugin.
 These are the fields in the config file. Lack of a config file will just use defaults.
 
-# Options are 1 or 0. 1 for on, 0 for off
+`#` Options are 1 or 0. 1 for on, 0 for off
 
-# Pressing X for melee toggles 3rd person for 2 seconds. Better Melee
+`#` Pressing X for melee toggles 3rd person for 2 seconds. Better Melee
 XButtonThirdPerson=1
 
-# Right stick up on toggles first and third person
+`#` Right stick up on toggles first and third person
 RightStickUpToggleThirdPerson=0
 
-# Right Stick Down sends B button for dodge
-RightStickDownB=1
+`#` Right Stick Down sends B button for dodge
+RightStickDownB=0
 
-# LB / RB (gliding) in 3rd person
-ThirdPersonGlide=0
+`#` LB / RB (gliding) in 3rd person
+ThirdPersonGlide=1
 
+`#` Swap LT and RB for single hand squeeze aiming.
+SwapLTRB=1
